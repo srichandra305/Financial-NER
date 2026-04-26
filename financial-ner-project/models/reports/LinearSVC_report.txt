@@ -1,0 +1,16 @@
+LinearSVC
+============================================================
+Accuracy : 0.7761   Weighted-F1 : 0.7519
+
+              precision    recall  f1-score   support
+
+     COMPANY       0.50      0.67      0.57         6
+    CURRENCY       1.00      0.67      0.80         6
+       EVENT       0.00      0.00      0.00         3
+   INDICATOR       1.00      0.20      0.33         5
+           O       0.85      0.91      0.88        44
+      TICKER       0.43      1.00      0.60         3
+
+    accuracy                           0.78        67
+   macro avg       0.63      0.57      0.53        67
+weighted avg       0.79      0.78      0.75        67

@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Financial NER — Entity Extraction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet" />
+<style>
+/* ── Reset & Variables ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:         #0d0f14;
+  --surface:    #141720;
+  --surface2:   #1c2030;
+  --border:     #252b3b;
+  --text:       #e2e8f0;
+  --text-muted: #64748b;
+  --accent:     #38bdf8;
+
+  --company:    #3b82f6;
+  --company-bg: rgba(59,130,246,.12);
+  --ticker:     #a78bfa;
+  --ticker-bg:  rgba(167,139,250,.12);
+  --event:      #fbbf24;
+  --event-bg:   rgba(251,191,36,.12);
+  --currency:   #34d399;
+  --currency-bg:rgba(52,211,153,.12);
+  --indicator:  #f87171;
+  --indicator-bg:rgba(248,113,113,.12);
+}
+
+html { font-size: 16px; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* ── Layout ────────────────────────────────────────────────────── */
+.shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 24px 80px;
+}
+
+/* ── Header ────────────────────────────────────────────────────── */
+header {
+  padding: 36px 0 28px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 40px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.logo-mark {
+  width: 42px; height: 42px;
+  background: linear-gradient(135deg, var(--accent), #6366f1);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0;
+}
+.header-text h1 {
+  font-family: 'Space Mono', monospace;
+  font-size: clamp(1.1rem, 2.5vw, 1.5rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.header-text p {
+  font-size: .85rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.model-badge {
+  margin-left: auto;
+  font-family: 'Space Mono', monospace;
+  font-size: .72rem;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.model-badge span { color: var(--accent); }
+
+/* ── Two-column grid ───────────────────────────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+@media(max-width:780px) { .grid { grid-template-columns: 1fr; } }
+
+/* ── Card ──────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.card-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  font-family: 'Space Mono', monospace;
+  font-size: .78rem;
+  color: var(--text-muted);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  display: flex; align-items: center; gap: 8px;
+}
+.card-header .dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.card-body { padding: 20px; }
+
+/* ── Textarea & button ─────────────────────────────────────────── */
+textarea {
+  width: 100%;
+  min-height: 200px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: .95rem;
+  padding: 14px 16px;
+  resize: vertical;
+  outline: none;
+  transition: border-color .2s;
+  line-height: 1.7;
+}
+textarea:focus { border-color: var(--accent); }
+textarea::placeholder { color: var(--text-muted); }
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.btn {
+  padding: 9px 20px;
+  border-radius: 8px;
+  border: none;
+  font-family: 'DM Sans', sans-serif;
+  font-size: .9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity .15s, transform .1s;
+}
+.btn:active { transform: scale(.97); }
+.btn-primary {
+  background: var(--accent);
+  color: #0d0f14;
+}
+.btn-primary:hover { opacity: .88; }
+.btn-secondary {
+  background: var(--surface2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover { color: var(--text); border-color: #3f4760; }
+
+/* ── Label filter chips ────────────────────────────────────────── */
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.chip {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: .78rem;
+  font-family: 'Space Mono', monospace;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: all .15s;
+  user-select: none;
+}
+.chip[data-label="COMPANY"]   { color: var(--company);   border-color: var(--company);   background: var(--company-bg); }
+.chip[data-label="TICKER"]    { color: var(--ticker);    border-color: var(--ticker);    background: var(--ticker-bg); }
+.chip[data-label="EVENT"]     { color: var(--event);     border-color: var(--event);     background: var(--event-bg); }
+.chip[data-label="CURRENCY"]  { color: var(--currency);  border-color: var(--currency);  background: var(--currency-bg); }
+.chip[data-label="INDICATOR"] { color: var(--indicator); border-color: var(--indicator); background: var(--indicator-bg); }
+.chip.off { opacity: .3; }
+
+/* ── Result panel ──────────────────────────────────────────────── */
+#result-panel {
+  min-height: 200px;
+}
+
+/* Highlighted text */
+.highlighted-text {
+  font-size: .95rem;
+  line-height: 2.1;
+  word-break: break-word;
+}
+.ent-tag {
+  display: inline;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 500;
+  position: relative;
+  cursor: default;
+  white-space: nowrap;
+}
+.ent-tag::after {
+  content: attr(data-label);
+  font-family: 'Space Mono', monospace;
+  font-size: .62rem;
+  vertical-align: super;
+  margin-left: 3px;
+  opacity: .8;
+}
+
+/* ── Entity list ───────────────────────────────────────────────── */
+.ent-list { margin-top: 24px; }
+.ent-list h3 {
+  font-family: 'Space Mono', monospace;
+  font-size: .72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  margin-bottom: 12px;
+}
+.ent-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: .82rem;
+  font-weight: 500;
+  margin: 3px;
+  border: 1.5px solid transparent;
+}
+
+/* ── Summary bar ───────────────────────────────────────────────── */
+.summary-bar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 20px;
+  background: var(--surface2);
+  border-top: 1px solid var(--border);
+}
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .82rem;
+}
+.summary-count {
+  font-family: 'Space Mono', monospace;
+  font-size: .9rem;
+  font-weight: 700;
+}
+
+/* ── Spinner ───────────────────────────────────────────────────── */
+.spinner-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 180px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  width: 32px; height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+
+/* ── Empty / error states ──────────────────────────────────────── */
+.state-empty, .state-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 180px;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: .88rem;
+  text-align: center;
+}
+.state-error { color: #f87171; }
+.state-icon { font-size: 2rem; }
+
+/* ── Example sentences ─────────────────────────────────────────── */
+.examples {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.example-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: .8rem;
+  padding: 7px 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all .15s;
+}
+.example-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* ── Fade-in animation ─────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity:0; transform:translateY(8px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.fade-up { animation: fadeUp .3s ease both; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- Header -->
+  <header>
+    <div class="logo-mark">🔍</div>
+    <div class="header-text">
+      <h1>Financial NER</h1>
+      <p>Named Entity Recognition for financial news text</p>
+    </div>
+    <div class="model-badge" id="model-badge">model: <span>—</span></div>
+  </header>
+
+  <!-- Main grid -->
+  <div class="grid">
+
+    <!-- ── Input column ──────────────────────────────────── -->
+    <div>
+      <div class="card">
+        <div class="card-header"><span class="dot"></span> Input</div>
+        <div class="card-body">
+          <textarea
+            id="input-text"
+            placeholder="Paste financial news text here…&#10;&#10;e.g. Apple Inc (AAPL) reported record earnings of $97 billion, triggering a stock split announcement by the Fed."
+          ></textarea>
+
+          <div class="actions">
+            <button class="btn btn-primary" id="analyze-btn">⚡ Analyse</button>
+            <button class="btn btn-secondary" id="clear-btn">Clear</button>
+          </div>
+
+          <!-- Label filter chips -->
+          <div class="filter-row" id="filter-chips">
+            <span style="font-size:.78rem;color:var(--text-muted);align-self:center;">Filter:</span>
+            <span class="chip" data-label="COMPANY">🏢 COMPANY</span>
+            <span class="chip" data-label="TICKER">📈 TICKER</span>
+            <span class="chip" data-label="EVENT">⚡ EVENT</span>
+            <span class="chip" data-label="CURRENCY">💵 CURRENCY</span>
+            <span class="chip" data-label="INDICATOR">📊 INDICATOR</span>
+          </div>
+
+          <!-- Examples -->
+          <div class="examples">
+            <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:2px;">Try an example:</div>
+            <button class="example-btn" data-ex="Apple Inc (AAPL) reported record earnings of $97 billion this quarter, sending shares to all-time highs.">
+              Apple Q4 earnings report
+            </button>
+            <button class="example-btn" data-ex="The Federal Reserve raised interest rates by 25 basis points, causing the S&P 500 to drop 200 points amid rising CPI concerns.">
+              Fed rate hike impact
+            </button>
+            <button class="example-btn" data-ex="Tesla TSLA completed a merger with SolarCity worth $2.6 billion while NVDA announced a 4-for-1 stock split.">
+              Tesla & NVIDIA corporate events
+            </button>
+            <button class="example-btn" data-ex="Bitcoin BTC crossed $50,000 after SEC approved a Bitcoin ETF, while EUR/USD fell following the ECB rate decision.">
+              Crypto & currency moves
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Result column ─────────────────────────────────── -->
+    <div style="display:flex;flex-direction:column;gap:0;">
+      <div class="card" style="flex:1;">
+        <div class="card-header"><span class="dot"></span> Entities</div>
+        <div class="card-body" id="result-panel">
+          <div class="state-empty">
+            <div class="state-icon">📄</div>
+            <div>Enter text and click <strong>Analyse</strong></div>
+          </div>
+        </div>
+
+        <!-- Summary bar (hidden until result) -->
+        <div class="summary-bar" id="summary-bar" style="display:none;"></div>
+      </div>
+    </div>
+
+  </div><!-- /grid -->
+
+</div><!-- /shell -->
+
+<script>
+// ── Config ──────────────────────────────────────────────────────────────────
+const API_BASE = "http://localhost:8000";
+
+// ── State ───────────────────────────────────────────────────────────────────
+let activeLabels = new Set(["COMPANY","TICKER","EVENT","CURRENCY","INDICATOR"]);
+let lastResult   = null;
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+function labelColor(label) {
+  const map = {
+    COMPANY:   "var(--company)",
+    TICKER:    "var(--ticker)",
+    EVENT:     "var(--event)",
+    CURRENCY:  "var(--currency)",
+    INDICATOR: "var(--indicator)",
+  };
+  return map[label] || "var(--text-muted)";
+}
+function labelBg(label) {
+  const map = {
+    COMPANY:   "var(--company-bg)",
+    TICKER:    "var(--ticker-bg)",
+    EVENT:     "var(--event-bg)",
+    CURRENCY:  "var(--currency-bg)",
+    INDICATOR: "var(--indicator-bg)",
+  };
+  return map[label] || "transparent";
+}
+
+// ── Filter chips ─────────────────────────────────────────────────────────────
+document.querySelectorAll(".chip").forEach(chip => {
+  chip.addEventListener("click", () => {
+    const lbl = chip.dataset.label;
+    if (activeLabels.has(lbl)) {
+      if (activeLabels.size === 1) return; // keep at least one
+      activeLabels.delete(lbl);
+      chip.classList.add("off");
+    } else {
+      activeLabels.add(lbl);
+      chip.classList.remove("off");
+    }
+    if (lastResult) renderResult(lastResult);
+  });
+});
+
+// ── Example buttons ───────────────────────────────────────────────────────────
+document.querySelectorAll(".example-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    $("input-text").value = btn.dataset.ex;
+    analyse();
+  });
+});
+
+// ── Clear ─────────────────────────────────────────────────────────────────────
+$("clear-btn").addEventListener("click", () => {
+  $("input-text").value = "";
+  lastResult = null;
+  $("result-panel").innerHTML = `
+    <div class="state-empty">
+      <div class="state-icon">📄</div>
+      <div>Enter text and click <strong>Analyse</strong></div>
+    </div>`;
+  $("summary-bar").style.display = "none";
+});
+
+// ── Analyse ───────────────────────────────────────────────────────────────────
+$("analyze-btn").addEventListener("click", analyse);
+$("input-text").addEventListener("keydown", e => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) analyse();
+});
+
+async function analyse() {
+  const text = $("input-text").value.trim();
+  if (!text) return;
+
+  // Spinner
+  $("result-panel").innerHTML = `<div class="spinner-wrap"><div class="spinner"></div></div>`;
+  $("summary-bar").style.display = "none";
+
+  try {
+    const res = await fetch(`${API_BASE}/predict`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        text,
+        filter_labels: null, // we filter client-side for instant toggle
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Request failed");
+    }
+
+    const data = await res.json();
+    lastResult = data;
+    renderResult(data);
+
+    // Update model badge
+    const badge = $("model-badge");
+    badge.innerHTML = `model: <span>${data.model_used}</span>`;
+
+  } catch (err) {
+    $("result-panel").innerHTML = `
+      <div class="state-error">
+        <div class="state-icon">⚠️</div>
+        <div>${err.message}</div>
+        <div style="font-size:.75rem;margin-top:4px;">Is the backend running? <code>uvicorn backend.main:app --reload</code></div>
+      </div>`;
+  }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderResult(data) {
+  const panel = $("result-panel");
+  const active = activeLabels;
+
+  // ── Build highlighted HTML ─────────────────────────────────
+  let html = '<div class="highlighted-text fade-up">';
+
+  // Walk tokens and wrap entities
+  const tokens = data.tokens;
+  let i = 0;
+  while (i < tokens.length) {
+    const tok = tokens[i];
+    if (tok.label !== "O" && active.has(tok.label)) {
+      // Find span end
+      let j = i + 1;
+      while (j < tokens.length && tokens[j].label === tok.label) j++;
+      const spanText = tokens.slice(i, j).map(t => t.token).join(" ");
+      html += `<span
+        class="ent-tag"
+        data-label="${tok.label}"
+        style="
+          color:${labelColor(tok.label)};
+          background:${labelBg(tok.label)};
+          border-bottom:2px solid ${labelColor(tok.label)};
+        "
+        title="${tok.label}"
+      >${escHtml(spanText)}</span> `;
+      i = j;
+    } else {
+      html += escHtml(tok.token) + " ";
+      i++;
+    }
+  }
+  html += "</div>";
+
+  // ── Entity list grouped by label ───────────────────────────
+  const grouped = {};
+  for (const ent of data.entities) {
+    if (!active.has(ent.label)) continue;
+    if (!grouped[ent.label]) grouped[ent.label] = [];
+    grouped[ent.label].push(ent);
+  }
+
+  if (Object.keys(grouped).length > 0) {
+    html += '<div class="ent-list fade-up">';
+    for (const [label, ents] of Object.entries(grouped)) {
+      // Deduplicate
+      const seen = new Set();
+      const unique = ents.filter(e => {
+        const k = e.text.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k); return true;
+      });
+      html += `<h3>${label}</h3><div style="margin-bottom:12px;">`;
+      for (const e of unique) {
+        html += `
+          <span class="ent-pill" style="
+            color:${labelColor(e.label)};
+            background:${labelBg(e.label)};
+            border-color:${labelColor(e.label)};
+          ">${e.icon} ${escHtml(e.text)}</span>`;
+      }
+      html += "</div>";
+    }
+    html += "</div>";
+  } else {
+    html += `<div style="color:var(--text-muted);font-size:.88rem;margin-top:16px;">
+      No entities found for the selected labels.
+    </div>`;
+  }
+
+  panel.innerHTML = html;
+
+  // ── Summary bar ────────────────────────────────────────────
+  const bar = $("summary-bar");
+  const labelOrder = ["COMPANY","TICKER","EVENT","CURRENCY","INDICATOR"];
+  const icons = { COMPANY:"🏢", TICKER:"📈", EVENT:"⚡", CURRENCY:"💵", INDICATOR:"📊" };
+
+  let barHtml = "";
+  for (const lbl of labelOrder) {
+    if (!active.has(lbl)) continue;
+    const count = (data.entities || []).filter(e => e.label === lbl).length;
+    barHtml += `
+      <div class="summary-item">
+        <span>${icons[lbl]}</span>
+        <span style="color:var(--text-muted);font-size:.78rem;">${lbl}</span>
+        <span class="summary-count" style="color:${labelColor(lbl)}">${count}</span>
+      </div>`;
+  }
+  bar.innerHTML = barHtml;
+  bar.style.display = "flex";
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ── Fetch model info on load ─────────────────────────────────────────────────
+(async () => {
+  try {
+    const res  = await fetch(`${API_BASE}/model/info`);
+    const data = await res.json();
+    const badge = $("model-badge");
+    badge.innerHTML = `model: <span>${data.best_model}</span>`;
+  } catch { /* backend not running yet */ }
+})();
+</script>
+</body>
+</html>

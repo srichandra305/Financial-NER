@@ -1,0 +1,22 @@
+{
+  "best_model": "RandomForest",
+  "weighted_f1": 0.7748,
+  "results": {
+    "LogisticRegression": {
+      "f1": 0.6384,
+      "acc": 0.6866
+    },
+    "RidgeClassifier": {
+      "f1": 0.7519,
+      "acc": 0.7761
+    },
+    "LinearSVC": {
+      "f1": 0.7519,
+      "acc": 0.7761
+    },
+    "RandomForest": {
+      "f1": 0.7748,
+      "acc": 0.806
+    }
+  }
+}
